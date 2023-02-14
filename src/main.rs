@@ -1,5 +1,8 @@
 #![allow(unused)]
 
+mod detect;
+mod track;
+
 use opencv::video::Tracker;
 use opencv::{core, highgui, imgproc, prelude::*, tracking, videoio};
 
@@ -38,35 +41,42 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         panic!("Unable to open default camera!");
     }
 
-    let params = tracking::TrackerKCF_Params::default().unwrap();
-    let mut t = <dyn tracking::TrackerKCF>::create(params)?;
+    let mut tracker = track::RolandTrack::create();
+
+    // let params = tracking::TrackerKCF_Params::default().unwrap();
+    // let mut t = <dyn tracking::TrackerKCF>::create(params)?;
+
+    // let mut bounding_box = highgui::select_roi(&mut frame, false, false).unwrap();
+    // t.init(&mut frame, bounding_box);
 
     let mut frame = Mat::default();
     cam.read(&mut frame)?;
 
-    let mut bounding_box = highgui::select_roi(&mut frame, false, false).unwrap();
-    t.init(&mut frame, bounding_box);
-
     loop {
         cam.read(&mut frame)?;
+
+        // detection
+        let mut draw = frame.clone();
+        detect::detect_checkerboard(&frame, &mut draw)?;
+
         // found object
-        match t.update(&mut frame, &mut bounding_box) {
-            Ok(true) => {
-                imgproc::rectangle(
-                    &mut frame,
-                    bounding_box,
-                    core::Scalar::new(0f64, -1f64, -1f64, -1f64),
-                    2,
-                    8,
-                    0,
-                );
-            }
-            Ok(false) => println!("object is out of the frame"),
-            Err(e) => println!("{}", e),
-        }
+        // match t.update(&mut frame, &mut bounding_box) {
+        //     Ok(true) => {
+        //         imgproc::rectangle(
+        //             &mut frame,
+        //             bounding_box,
+        //             core::Scalar::new(0f64, -1f64, -1f64, -1f64),
+        //             2,
+        //             8,
+        //             0,
+        //         );
+        //     }
+        //     Ok(false) => println!("object is out of the frame"),
+        //     Err(e) => println!("{}", e),
+        // }
 
         if frame.size()?.width > 0 {
-            highgui::imshow("videocap", &frame)?;
+            highgui::imshow("videocap", &draw)?;
         }
 
         let key = highgui::wait_key(10)?;
