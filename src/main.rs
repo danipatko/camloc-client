@@ -3,6 +3,7 @@
 mod detect;
 mod track;
 
+use opencv::core::VecN;
 use opencv::video::Tracker;
 use opencv::{core, highgui, imgproc, prelude::*, tracking, videoio};
 
@@ -41,7 +42,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         panic!("Unable to open default camera!");
     }
 
-    let mut tracker = track::RolandTrack::create();
+    // let mut tracker = track::RolandTrack::create();
 
     // let params = tracking::TrackerKCF_Params::default().unwrap();
     // let mut t = <dyn tracking::TrackerKCF>::create(params)?;
@@ -57,7 +58,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         // detection
         let mut draw = frame.clone();
-        detect::detect_checkerboard(&frame, &mut draw)?;
+        match detect::detect_checkerboard(&frame, &mut draw)? {
+            Some(bx) => imgproc::rectangle(
+                &mut draw,
+                bx,
+                VecN::new(255.0, 255.0, 0.0, 1.0),
+                2,
+                imgproc::LINE_8,
+                0,
+            )?,
+            None => (),
+        }
 
         // found object
         // match t.update(&mut frame, &mut bounding_box) {
