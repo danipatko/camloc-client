@@ -1,16 +1,16 @@
 mod detect;
 mod track;
 
-use opencv::{highgui, prelude::*, videoio};
+use opencv::{prelude::*, videoio};
 
-use crate::track::Center;
+// use crate::track::Center;
 
-// use std::io::{Error, Read, Write};
-// use std::net::{Ipv4Addr, SocketAddrV4, TcpListener};
+use std::io::Write;
+use std::net::{Ipv4Addr, SocketAddrV4, TcpListener};
 
-fn main() -> opencv::Result<()> {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     // base tcp server
-    /*
+    //*
     let loopback = Ipv4Addr::new(127, 0, 0, 1);
     let socket = SocketAddrV4::new(loopback, 1111);
     let listener = TcpListener::bind(socket)?;
@@ -21,55 +21,54 @@ fn main() -> opencv::Result<()> {
         let (mut tcp_stream, addr) = listener.accept()?; // block  until requested
         println!("Connection received from {:?}", addr);
 
+        // highgui::named_window("videocap", highgui::WINDOW_AUTOSIZE)?;
+        let mut cam = videoio::VideoCapture::new(0, videoio::CAP_ANY)?; // 0 is the default camera
+        let opened = videoio::VideoCapture::is_opened(&cam)?;
+        if !opened {
+            panic!("Unable to open default camera!");
+        }
+
+        let mut frame = Mat::default();
+        cam.read(&mut frame)?;
+        let rect = match detect::detect_checkerboard(&frame)? {
+            Some(bx) => bx,
+            None => opencv::core::Rect::default(),
+        };
+
+        let mut tracker = track::RolandTrack::create(&frame, rect);
+
         loop {
-            match tcp_stream.write("augh ".as_bytes()) {
-                Ok(_) => (),
-                Err(e) => {
-                    println!("Connection terminated: {}", e.kind());
-                    break;
-                }
+            cam.read(&mut frame)?;
+            // let mut draw = frame.clone();
+
+            // simple detection
+            // match detect::detect_checkerboard(&frame)? {
+            //     Some(bx) => {
+            //         track::draw(&mut draw, bx)?;
+            //         let x = bx.find_x(&frame);
+            //         println!("detected {}", x);
+            //     }
+            //     None => (),
+            // };
+
+            // found object
+
+            let Some(x) = tracker.update(&mut frame/*, &mut draw */)? else {
+                continue;
+            };
+
+            if tcp_stream.write_all(&x.to_be_bytes()).is_err() {
+                break;
             }
+
+            // IMPORTANT: the whole shit breaks for whatever reason without this delay
+            // let _key = highgui::wait_key(10)?;
+
+            // if draw.size()?.width > 0 {
+            //     highgui::imshow("videocap", &draw)?;
+            // }
         }
     }
     // */
-
-    highgui::named_window("videocap", highgui::WINDOW_AUTOSIZE)?;
-    let mut cam = videoio::VideoCapture::new(0, videoio::CAP_ANY)?; // 0 is the default camera
-    let opened = videoio::VideoCapture::is_opened(&cam)?;
-    if !opened {
-        panic!("Unable to open default camera!");
-    }
-
-    // let mut tracker = track::RolandTrack::create();
-    let mut frame = Mat::default();
-    cam.read(&mut frame)?;
-
-    loop {
-        cam.read(&mut frame)?;
-        let mut draw = frame.clone();
-
-        match detect::detect_checkerboard(&frame)? {
-            Some(bx) => {
-                track::draw(&mut draw, bx)?;
-                let x = bx.find_x(&frame);
-                println!("detected {}", x);
-            }
-            None => (),
-        };
-
-        // found object
-        // match tracker.update(&mut frame, &mut draw)? {
-        //     Some(x) => println!("detected {}", x),
-        //     _ => (),
-        // };
-
-        // IMPORTANT: the whole shit breaks for whatever reason without this delay
-        let _key = highgui::wait_key(10)?;
-
-        if draw.size()?.width > 0 {
-            highgui::imshow("videocap", &draw)?;
-        }
-    }
-
     // Ok(())
 }

@@ -37,27 +37,34 @@ impl Center for Rect {
     }
 }
 
-impl RolandTrack {
-    pub fn create() -> Self {
-        let params = tracking::TrackerKCF_Params::default().unwrap();
+fn create_tracker(frame: &Mat, bx: Rect) -> Ptr<dyn tracking::TrackerKCF> {
+    let params = tracking::TrackerKCF_Params::default().unwrap();
 
-        match <dyn tracking::TrackerKCF>::create(params) {
-            Ok(t) => Self {
-                has_object: true,
-                tracker: t,
-                bounding_box: Rect::default(),
-            },
-            Err(e) => panic!(
-                "Failed to initialie TrackerKCF in RolandTrack::create()\n{}",
-                e
-            ),
+    match <dyn tracking::TrackerKCF>::create(params) {
+        Ok(mut t) => {
+            t.init(frame, bx);
+            t
+        }
+        Err(e) => panic!(
+            "Failed to initialie TrackerKCF in RolandTrack::create()\n{}",
+            e
+        ),
+    }
+}
+
+impl RolandTrack {
+    pub fn create(frame: &Mat, bx: Rect) -> Self {
+        Self {
+            has_object: true,
+            tracker: create_tracker(frame, bx),
+            bounding_box: Rect::default(),
         }
     }
 
     pub fn update(
         &mut self,
         frame: &Mat,
-        dst: &mut dyn ToInputOutputArray,
+        // dst: &mut dyn ToInputOutputArray,
     ) -> opencv::Result<Option<f64>> {
         // println!("has object: {}", self.has_object);
         // use trackerKCF to track known position
@@ -65,7 +72,7 @@ impl RolandTrack {
             match self.tracker.update(frame, &mut self.bounding_box) {
                 // no errors and found image
                 Ok(true) => {
-                    draw(dst, self.bounding_box)?;
+                    // draw(dst, self.bounding_box)?;
                     Ok(Some(self.bounding_box.find_x(frame)))
                 }
                 // error or lost object
@@ -79,13 +86,17 @@ impl RolandTrack {
             // use detect to find again
             match detect::detect_checkerboard(&frame)? {
                 Some(bx) => {
-                    println!("detected rectangle again yay");
+                    println!("detected rectangle again at {} {}", bx.width, bx.height);
                     self.has_object = true;
-                    draw(dst, bx)?;
-                    match self.tracker.init(frame, bx) {
-                        Err(e) => println!("{}", e),
-                        _ => (),
-                    };
+                    // draw(dst, bx)?;
+
+                    if !bx.empty() {
+                        self.tracker = create_tracker(frame, bx);
+                        // match self.tracker.init(frame, bx) {
+                        //     Err(e) => println!("{}", e),
+                        //     _ => (),
+                        // };
+                    }
 
                     self.bounding_box = bx.clone();
                     Ok(Some(bx.find_x(frame)))
