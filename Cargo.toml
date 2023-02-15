@@ -6,4 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-opencv = "0.76.4"
+cv-convert = {version="0.22.0", features=["opencv_0-76"]}
+ndarray = "0.15.6"
+ndarray-npy = "0.8.1"
+opencv = "0.77.0"
