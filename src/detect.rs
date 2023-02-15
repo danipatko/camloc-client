@@ -8,14 +8,14 @@ use opencv::{
 static BIN_TRESHOLD: f64 = 0.8 * 255.0;
 static MIN_AREA: i32 = 20;
 static MAX_AREA: i32 = 1000;
-static MAX_RATIO: f64 = 0.1;
+static MAX_RATIO: f64 = 0.05;
 static ADJACENT_DIST: i32 = 200;
 static ADJACENT_AREA_DIFF: i32 = 200;
 
 /// detects checkerboard squares  
 /// draws squares to `dst`  
 /// returns averaged point
-pub fn detect_checkerboard(frame: &Mat) -> Result<Option<Rect>, Box<dyn std::error::Error>> {
+pub fn detect_checkerboard(frame: &Mat) -> opencv::Result<Option<Rect>> {
     // create gray image
     let mut gray = frame.clone();
     imgproc::cvt_color(&frame, &mut gray, imgproc::COLOR_BGR2GRAY, 0)?;
@@ -43,10 +43,11 @@ pub fn detect_checkerboard(frame: &Mat) -> Result<Option<Rect>, Box<dyn std::err
     let mut boxes = Vec::<Rect>::new();
     for c in contours {
         if let Ok(rect) = imgproc::bounding_rect(&c) {
-            //
+            let ratio = rect.width as f64 / rect.height as f64;
             if rect.area() > MIN_AREA
                 && rect.area() < MAX_AREA
-                && (1.0 - (rect.width as f64 / rect.height as f64)).abs() < MAX_RATIO
+                && ratio < 1.0 + MAX_RATIO
+                && ratio > 1.0 - MAX_RATIO
             {
                 boxes.push(rect);
             }

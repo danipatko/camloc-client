@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 use crate::detect;
 use opencv::core::VecN;
 use opencv::video::Tracker;
@@ -14,7 +16,7 @@ pub struct RolandTrack {
     bounding_box: Rect,
 }
 
-trait Center {
+pub trait Center {
     fn center(&self) -> Point_<i32>;
     fn find_x(&self, frame: &Mat) -> f64;
 }
@@ -56,18 +58,19 @@ impl RolandTrack {
         &mut self,
         frame: &Mat,
         dst: &mut dyn ToInputOutputArray,
-    ) -> Result<Option<f64>, Box<dyn std::error::Error>> {
-        println!("lost object: {}", self.has_object);
+    ) -> opencv::Result<Option<f64>> {
+        // println!("has object: {}", self.has_object);
         // use trackerKCF to track known position
         if self.has_object {
             match self.tracker.update(frame, &mut self.bounding_box) {
                 // no errors and found image
                 Ok(true) => {
-                    draw(dst, self.bounding_box);
+                    draw(dst, self.bounding_box)?;
                     Ok(Some(self.bounding_box.find_x(frame)))
                 }
                 // error or lost object
                 _ => {
+                    println!("lost object");
                     self.has_object = false;
                     Ok(None)
                 }
@@ -78,22 +81,22 @@ impl RolandTrack {
                 Some(bx) => {
                     println!("detected rectangle again yay");
                     self.has_object = true;
-                    draw(dst, bx);
-                    self.tracker.init(frame, bx);
+                    draw(dst, bx)?;
+                    match self.tracker.init(frame, bx) {
+                        Err(e) => println!("{}", e),
+                        _ => (),
+                    };
 
                     self.bounding_box = bx.clone();
                     Ok(Some(bx.find_x(frame)))
                 }
-                None => {
-                    println!("unable to detect image");
-                    Ok(None)
-                }
+                None => Ok(None),
             }
         }
     }
 }
 
-fn draw(dst: &mut dyn ToInputOutputArray, rect: Rect) -> Result<(), Box<dyn std::error::Error>> {
+pub fn draw(dst: &mut dyn ToInputOutputArray, rect: Rect) -> opencv::Result<()> {
     imgproc::rectangle(
         dst,
         rect,

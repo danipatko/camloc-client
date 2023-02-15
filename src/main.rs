@@ -3,10 +3,12 @@ mod track;
 
 use opencv::{highgui, prelude::*, videoio};
 
+use crate::track::Center;
+
 // use std::io::{Error, Read, Write};
 // use std::net::{Ipv4Addr, SocketAddrV4, TcpListener};
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() -> opencv::Result<()> {
     // base tcp server
     /*
     let loopback = Ipv4Addr::new(127, 0, 0, 1);
@@ -38,8 +40,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         panic!("Unable to open default camera!");
     }
 
-    let mut tracker = track::RolandTrack::create();
-
+    // let mut tracker = track::RolandTrack::create();
     let mut frame = Mat::default();
     cam.read(&mut frame)?;
 
@@ -47,21 +48,28 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         cam.read(&mut frame)?;
         let mut draw = frame.clone();
 
-        // found object
-        match tracker.update(&mut frame, &mut draw)? {
-            Some(x) => {
-                println!("x = {}", x)
+        match detect::detect_checkerboard(&frame)? {
+            Some(bx) => {
+                track::draw(&mut draw, bx)?;
+                let x = bx.find_x(&frame);
+                println!("detected {}", x);
             }
             None => (),
-        }
+        };
+
+        // found object
+        // match tracker.update(&mut frame, &mut draw)? {
+        //     Some(x) => println!("detected {}", x),
+        //     _ => (),
+        // };
+
+        // IMPORTANT: the whole shit breaks for whatever reason without this delay
+        let _key = highgui::wait_key(10)?;
 
         if draw.size()?.width > 0 {
             highgui::imshow("videocap", &draw)?;
         }
-
-        // let key = highgui::wait_key(10)?;
-        // if key > 0 && key != 255 {
-        //     break;
-        // }
     }
+
+    // Ok(())
 }
