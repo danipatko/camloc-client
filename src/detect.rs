@@ -1,9 +1,7 @@
-use opencv::core::VecN;
 use opencv::types::VectorOfVectorOfPoint;
-use opencv::video::Tracker;
 use opencv::{
-    core::{Point_, Rect, ToInputOutputArray, Vector},
-    highgui, imgproc,
+    core::{Point_, Rect},
+    imgproc,
     prelude::*,
 };
 
@@ -17,10 +15,7 @@ static ADJACENT_AREA_DIFF: i32 = 200;
 /// detects checkerboard squares  
 /// draws squares to `dst`  
 /// returns averaged point
-pub fn detect_checkerboard(
-    frame: &Mat,
-    dst: &mut dyn ToInputOutputArray,
-) -> Result<Option<Rect>, Box<dyn std::error::Error>> {
+pub fn detect_checkerboard(frame: &Mat) -> Result<Option<Rect>, Box<dyn std::error::Error>> {
     // create gray image
     let mut gray = frame.clone();
     imgproc::cvt_color(&frame, &mut gray, imgproc::COLOR_BGR2GRAY, 0)?;
@@ -45,30 +40,16 @@ pub fn detect_checkerboard(
         Point_::<i32> { x: 0, y: 0 },
     )?;
 
-    let mut rect = Rect::default();
-    let (mut sum_x, mut sum_y, mut count) = (0, 0, 0);
-
     let mut boxes = Vec::<Rect>::new();
     for c in contours {
-        rect = imgproc::bounding_rect(&c)?;
-
-        if rect.area() > MIN_AREA
-            && rect.area() < MAX_AREA
-            && (1.0 - (rect.width as f64 / rect.height as f64)).abs() < MAX_RATIO
-        {
-            boxes.push(rect);
-            sum_x += rect.x;
-            sum_y += rect.y;
-            count += 1;
-
-            // imgproc::rectangle(
-            //     dst,
-            //     rect,
-            //     VecN::new(0.0, 255.0, 0.0, 1.0),
-            //     2,
-            //     imgproc::LINE_8,
-            //     0,
-            // )?;
+        if let Ok(rect) = imgproc::bounding_rect(&c) {
+            //
+            if rect.area() > MIN_AREA
+                && rect.area() < MAX_AREA
+                && (1.0 - (rect.width as f64 / rect.height as f64)).abs() < MAX_RATIO
+            {
+                boxes.push(rect);
+            }
         }
     }
 
