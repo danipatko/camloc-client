@@ -2,23 +2,22 @@ mod detect;
 mod load;
 mod track;
 
-use opencv::{highgui, imgproc, prelude::*, videoio};
+use opencv::{prelude::*, videoio};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let (map1, map2) = load::maps("/home/dapa/code/camloc-client/picam")?;
+    let maps = load::maps("/home/dapa/code/camloc-client/picam")?;
 
-    highgui::named_window("videocap", highgui::WINDOW_AUTOSIZE)?;
-    let mut cam = videoio::VideoCapture::new(0, videoio::CAP_ANY)?; // 0 is the default camera
+    let cam = videoio::VideoCapture::new(0, videoio::CAP_ANY)?; // 0 is the default camera
     let opened = videoio::VideoCapture::is_opened(&cam)?;
     if !opened {
         panic!("Unable to open default camera!");
     }
 
-    let mut frame = Mat::default();
-    cam.read(&mut frame)?;
+    #[cfg(feature = "pi")]
+    tcp_loop(cam, maps)?;
 
-    let mut tracker = track::RolandTrack::create(&frame, opencv::core::Rect::default());
-    let mut undistorted = Mat::default();
+    #[cfg(not(feature = "pi"))]
+    dev_loop(cam, maps)?;
 
     // tcp_connect_loop(|| {
     //     cam.read(&mut frame);
@@ -37,52 +36,131 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     //     Some(0.0)
     // })?;
 
-    loop {
-        // let mut draw = frame.clone();
+    // loop {
+    // let mut draw = frame.clone();
 
-        // found object
-        // let Some(_) = tracker.update(&mut frame/*, &mut draw */)? else {
-        //     continue;
-        // };
+    // found object
+    // let Some(_) = tracker.update(&mut frame/*, &mut draw */)? else {
+    //     continue;
+    // };
 
-        // if tcp_stream.write_all(&x.to_be_bytes()).is_err() {
-        //     break;
-        // }
+    // if tcp_stream.write_all(&x.to_be_bytes()).is_err() {
+    //     break;
+    // }
 
-        // IMPORTANT: the whole shit breaks for whatever reason without this delay
-        let _key = highgui::wait_key(10)?;
+    // // IMPORTANT: the whole shit breaks for whatever reason without this delay
+    // let _key = highgui::wait_key(10)?;
 
-        if undistorted.size()?.width > 0 {
-            highgui::imshow("videocap", &undistorted)?;
-        }
-        // }
-    }
+    // if undistorted.size()?.width > 0 {
+    //     highgui::imshow("videocap", &undistorted)?;
+    // }
+    // }
+    // }
     // */
-    // Ok(())
+    Ok(())
 }
 
-fn tcp_connect_loop(f: fn() -> Option<f64>) -> std::io::Result<()> {
-    use std::io::Write;
-    use std::net::{Ipv4Addr, SocketAddrV4, TcpListener};
+/// starts tcp server with no GUI
+#[cfg(feature = "pi")]
+fn tcp_loop(
+    mut cam: opencv::videoio::VideoCapture,
+    (map1, map2): (Mat, Mat),
+) -> Result<(), Box<dyn std::error::Error>> {
+    use std::io::{Read, Write};
+    use std::net::TcpListener;
+    println!("Starting in raspberry mode...");
 
-    let loopback = Ipv4Addr::new(127, 0, 0, 1);
-    let socket = SocketAddrV4::new(loopback, 1111);
-    let listener = TcpListener::bind(socket)?;
+    // initialize tcp server
+    let listener = TcpListener::bind("0.0.0.0:1111")?;
     let port = listener.local_addr()?;
-    println!("Listening on {}, access this port to end the program", port);
+
+    // `frame` is remapped to `undistorted`
+    let mut frame = Mat::default();
+    let mut undistorted = Mat::default();
+
+    // initialize tracker
+    cam.read(&mut frame)?;
+    let mut tracker = track::RolandTrack::create(&frame, opencv::core::Rect::default());
 
     loop {
-        let (mut tcp_stream, addr) = listener.accept()?; // block  until requested
+        // block until requested
+        println!("Waiting for connections on {}", port);
+        let (mut tcp_stream, addr) = listener.accept()?;
         println!("Connection received from {:?}", addr);
 
+        // spam results
         loop {
-            if let Some(x) = f() {
+            cam.read(&mut frame)?;
+            opencv::imgproc::remap(
+                &frame,
+                &mut undistorted,
+                &map1,
+                &map2,
+                opencv::imgproc::INTER_LINEAR,
+                opencv::core::BORDER_CONSTANT,
+                opencv::core::Scalar::default(),
+            )?;
+
+            if let Some(x) = tracker.update(&undistorted)? {
                 if tcp_stream.write_all(&x.to_be_bytes()).is_err() {
+                    println!("Client disconnected");
                     break;
                 }
+
+            // TOFIX: find some better way to check if the client is still connected
+            // without checking this, the loop won't break until the tracker detects
+            // something, even if the client has disconnected
+            } else if tcp_stream.read(&mut vec![]).is_err() {
+                break;
             }
         }
     }
 
-    Ok(())
+    // Ok(())
+}
+
+#[cfg(not(feature = "pi"))]
+fn dev_loop(
+    mut cam: opencv::videoio::VideoCapture,
+    (map1, map2): (Mat, Mat),
+) -> Result<(), Box<dyn std::error::Error>> {
+    use opencv::highgui;
+    println!("Starting in development mode...");
+
+    let winname = "video";
+    highgui::named_window(winname, highgui::WINDOW_AUTOSIZE)?;
+
+    // `frame` is remapped to `undistorted`
+    let mut frame = Mat::default();
+    let mut undistorted = Mat::default();
+
+    // initialize tracker
+    cam.read(&mut frame)?;
+    let mut tracker = track::RolandTrack::create(&frame, opencv::core::Rect::default());
+
+    loop {
+        cam.read(&mut frame)?;
+
+        opencv::imgproc::remap(
+            &frame,
+            &mut undistorted,
+            &map1,
+            &map2,
+            opencv::imgproc::INTER_LINEAR,
+            opencv::core::BORDER_CONSTANT,
+            opencv::core::Scalar::default(),
+        )?;
+
+        let mut draw = undistorted.clone();
+        if let Some(x) = tracker.update(&undistorted, &mut draw)? {
+            println!("x = {:.10}", x)
+        }
+
+        let _key = highgui::wait_key(10)?;
+        if draw.size()?.width > 0 {
+            highgui::imshow(winname, &draw)?;
+        }
+    }
+
+    // Ok(())
 }
