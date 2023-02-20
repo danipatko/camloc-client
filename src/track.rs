@@ -64,7 +64,7 @@ impl RolandTrack {
     pub fn update(
         &mut self,
         frame: &Mat,
-        #[cfg(not(feature = "pi"))] dst: &mut dyn ToInputOutputArray,
+        dst: Option<&mut dyn ToInputOutputArray>,
     ) -> opencv::Result<Option<f64>> {
         // println!("has object: {}", self.has_object);
         // use trackerKCF to track known position
@@ -72,9 +72,9 @@ impl RolandTrack {
             match self.tracker.update(frame, &mut self.bounding_box) {
                 // no errors and found image
                 Ok(true) => {
-                    #[cfg(not(feature = "pi"))]
-                    draw(dst, self.bounding_box)?;
-
+                    if let Some(dst) = dst {
+                        draw(dst, self.bounding_box)?;
+                    }
                     Ok(Some(self.bounding_box.find_x(frame)))
                 }
                 // error or lost object
@@ -93,9 +93,9 @@ impl RolandTrack {
                         bx.width, bx.height
                     );
                     self.has_object = true;
-
-                    #[cfg(not(feature = "pi"))]
-                    draw(dst, bx)?;
+                    if let Some(dst) = dst {
+                        draw(dst, self.bounding_box)?;
+                    }
 
                     if !bx.empty() {
                         self.tracker = create_tracker(frame, bx);

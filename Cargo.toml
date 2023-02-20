@@ -5,11 +5,8 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[features]
-default = ["pi"]
-pi = []
-
 [dependencies]
+clap = { version = "4.1.6", features = ["derive"] }
 opencv = "0.77.0"
 
 [profile.release]
