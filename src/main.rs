@@ -87,14 +87,13 @@ fn tcp_loop(
                 opencv::core::Scalar::default(),
             )?;
 
-            if let Some(x) = tracker.update(&undistorted, None)? {
-                // TOFIX: find some better way to check if the client is still connected
-                // without checking this, the loop won't break until the tracker detects
-                // something, even if the client has disconnected
-                if tcp_stream.write_all(&x.to_be_bytes()).is_err() {
-                    println!("Client disconnected");
-                    break;
-                }
+            let x = tracker.update(&undistorted, None)?;
+            if tcp_stream
+                .write_all(&x.unwrap_or(f64::NAN).to_be_bytes())
+                .is_err()
+            {
+                println!("Client disconnected");
+                break;
             }
 
             // still need this delay
