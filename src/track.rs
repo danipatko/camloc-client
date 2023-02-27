@@ -1,7 +1,10 @@
-#![allow(unused)]
-
+use crate::cascade;
 use crate::detect;
+
+use opencv::core::find_file;
 use opencv::core::VecN;
+use opencv::objdetect;
+use opencv::objdetect::CascadeClassifier;
 use opencv::video::Tracker;
 use opencv::{
     core::{Point_, Ptr, Rect, ToInputOutputArray},
@@ -14,6 +17,7 @@ pub struct RolandTrack {
     has_object: bool,
     tracker: Ptr<dyn tracking::TrackerKCF>,
     bounding_box: Rect,
+    cascade_classifier: Option<CascadeClassifier>,
 }
 
 pub trait Center {
@@ -37,6 +41,7 @@ impl Center for Rect {
     }
 }
 
+#[allow(unused_must_use)]
 fn create_tracker(frame: &Mat, bx: Rect) -> Ptr<dyn tracking::TrackerKCF> {
     let params = tracking::TrackerKCF_Params::default().unwrap();
 
@@ -53,11 +58,18 @@ fn create_tracker(frame: &Mat, bx: Rect) -> Ptr<dyn tracking::TrackerKCF> {
 }
 
 impl RolandTrack {
-    pub fn create(frame: &Mat, bx: Rect) -> Self {
+    pub fn create(frame: &Mat, bx: Rect, faces: bool) -> Self {
         Self {
             has_object: true,
             tracker: create_tracker(frame, bx),
             bounding_box: Rect::default(),
+            cascade_classifier: match faces {
+                true => {
+                    let xml = find_file("haarcascade_eye.xml", true, false).unwrap();
+                    Some(objdetect::CascadeClassifier::new(&xml).unwrap())
+                }
+                false => None,
+            },
         }
     }
 
@@ -66,7 +78,6 @@ impl RolandTrack {
         frame: &Mat,
         dst: Option<&mut dyn ToInputOutputArray>,
     ) -> opencv::Result<Option<f64>> {
-        // println!("has object: {}", self.has_object);
         // use trackerKCF to track known position
         if self.has_object {
             match self.tracker.update(frame, &mut self.bounding_box) {
@@ -75,6 +86,7 @@ impl RolandTrack {
                     if let Some(dst) = dst {
                         draw(dst, self.bounding_box)?;
                     }
+                    println!("{:?}", self.bounding_box);
                     Ok(Some(self.bounding_box.find_x(frame)))
                 }
                 // error or lost object
@@ -85,19 +97,21 @@ impl RolandTrack {
                 }
             }
         } else {
-            // use detect to find again
-            match detect::detect_checkerboard(&frame)? {
+            let res = match self.cascade_classifier.as_mut() {
+                Some(c) => cascade::detect_faces(&frame, c)?,
+                None => detect::detect_checkerboard(&frame)?,
+            };
+
+            match res {
                 Some(bx) => {
-                    println!(
-                        "Detected rectangle at {} {}, launching tracker...",
-                        bx.width, bx.height
-                    );
+                    println!("Detected rectangle at {:?} launching tracker...", bx);
                     self.has_object = true;
                     if let Some(dst) = dst {
                         draw(dst, self.bounding_box)?;
                     }
 
                     if !bx.empty() {
+                        println!("creating tracker");
                         self.tracker = create_tracker(frame, bx);
                     }
 

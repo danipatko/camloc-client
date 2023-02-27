@@ -1,3 +1,4 @@
+mod cascade;
 mod detect;
 mod load;
 mod track;
@@ -24,22 +25,30 @@ struct Args {
     /// Specify the location of remap binary files
     #[arg(long, default_value_t = String::from("picam"))]
     path: String,
+
+    /// Camera index to open
+    #[arg(long, default_value_t = 0)]
+    camera_index: i32,
+
+    /// Detect faces instead of checkerboard
+    #[arg(long)]
+    faces: bool,
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
 
     let maps = load::maps(args.path.as_str())?;
-    let cam = videoio::VideoCapture::new(0, videoio::CAP_ANY)?; // 0 is the default camera
+    let cam = videoio::VideoCapture::new(args.camera_index, videoio::CAP_ANY)?; // 0 is the default camera
     let opened = videoio::VideoCapture::is_opened(&cam)?;
     if !opened {
         panic!("Unable to open default camera!");
     }
 
     if args.server {
-        tcp_loop(cam, maps, args.host, args.port)?;
+        tcp_loop(cam, maps, args.host, args.port, args.faces)?;
     } else {
-        dev_loop(cam, maps)?;
+        dev_loop(cam, maps, args.faces)?;
     }
 
     Ok(())
@@ -51,6 +60,7 @@ fn tcp_loop(
     (map1, map2): (Mat, Mat),
     host: String,
     port: u16,
+    faces: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     use std::io::Write;
     use std::net::TcpListener;
@@ -66,7 +76,7 @@ fn tcp_loop(
 
     // initialize tracker
     cam.read(&mut frame)?;
-    let mut tracker = track::RolandTrack::create(&frame, opencv::core::Rect::default());
+    let mut tracker = track::RolandTrack::create(&frame, opencv::core::Rect::default(), faces);
 
     loop {
         // block until requested
@@ -107,6 +117,7 @@ fn tcp_loop(
 fn dev_loop(
     mut cam: opencv::videoio::VideoCapture,
     (map1, map2): (Mat, Mat),
+    faces: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     println!("Starting in development mode...");
 
@@ -119,7 +130,7 @@ fn dev_loop(
 
     // initialize tracker
     cam.read(&mut frame)?;
-    let mut tracker = track::RolandTrack::create(&frame, opencv::core::Rect::default());
+    let mut tracker = track::RolandTrack::create(&frame, opencv::core::Rect::default(), faces);
 
     loop {
         cam.read(&mut frame)?;

@@ -11,4 +11,4 @@ lto = true
 
 [dependencies]
 clap = { version = "4.1.6", features = ["derive"] }
-opencv = "0.77.0"
+opencv = { version = "0.77.0" }
