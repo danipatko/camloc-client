@@ -32,7 +32,11 @@ struct Args {
 
     /// Detect faces instead of checkerboard
     #[arg(long)]
-    faces: bool,
+    cascade: bool,
+
+    /// Haarcascade xml file path
+    #[arg(long, default_value_t = String::from("haarcascade_eye.xml"))]
+    cascade_path: String,
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -46,9 +50,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     if args.server {
-        tcp_loop(cam, maps, args.host, args.port, args.faces)?;
+        tcp_loop(cam, maps, args)?;
     } else {
-        dev_loop(cam, maps, args.faces)?;
+        dev_loop(cam, maps, args)?;
     }
 
     Ok(())
@@ -58,16 +62,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 fn tcp_loop(
     mut cam: opencv::videoio::VideoCapture,
     (map1, map2): (Mat, Mat),
-    host: String,
-    port: u16,
-    faces: bool,
+    args: Args,
 ) -> Result<(), Box<dyn std::error::Error>> {
     use std::io::Write;
     use std::net::TcpListener;
     println!("Starting in server mode...");
 
     // initialize tcp server
-    let listener = TcpListener::bind(format!("{}:{}", host, port))?;
+    let listener = TcpListener::bind(format!("{}:{}", args.host, args.port))?;
     let port = listener.local_addr()?;
 
     // `frame` is remapped to `undistorted`
@@ -76,7 +78,12 @@ fn tcp_loop(
 
     // initialize tracker
     cam.read(&mut frame)?;
-    let mut tracker = track::RolandTrack::create(&frame, opencv::core::Rect::default(), faces);
+    let mut tracker = track::RolandTrack::create(
+        &frame,
+        opencv::core::Rect::default(),
+        args.cascade,
+        args.cascade_path,
+    );
 
     loop {
         // block until requested
@@ -117,7 +124,7 @@ fn tcp_loop(
 fn dev_loop(
     mut cam: opencv::videoio::VideoCapture,
     (map1, map2): (Mat, Mat),
-    faces: bool,
+    args: Args,
 ) -> Result<(), Box<dyn std::error::Error>> {
     println!("Starting in development mode...");
 
@@ -130,7 +137,12 @@ fn dev_loop(
 
     // initialize tracker
     cam.read(&mut frame)?;
-    let mut tracker = track::RolandTrack::create(&frame, opencv::core::Rect::default(), faces);
+    let mut tracker = track::RolandTrack::create(
+        &frame,
+        opencv::core::Rect::default(),
+        args.cascade,
+        args.cascade_path,
+    );
 
     loop {
         cam.read(&mut frame)?;

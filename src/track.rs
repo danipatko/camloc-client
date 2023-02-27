@@ -58,14 +58,14 @@ fn create_tracker(frame: &Mat, bx: Rect) -> Ptr<dyn tracking::TrackerKCF> {
 }
 
 impl RolandTrack {
-    pub fn create(frame: &Mat, bx: Rect, faces: bool) -> Self {
+    pub fn create(frame: &Mat, bx: Rect, cascade: bool, path: String) -> Self {
         Self {
             has_object: true,
             tracker: create_tracker(frame, bx),
             bounding_box: Rect::default(),
-            cascade_classifier: match faces {
+            cascade_classifier: match cascade {
                 true => {
-                    let xml = find_file("haarcascade_eye.xml", true, false).unwrap();
+                    let xml = find_file(path.as_str(), true, false).unwrap();
                     Some(objdetect::CascadeClassifier::new(&xml).unwrap())
                 }
                 false => None,
